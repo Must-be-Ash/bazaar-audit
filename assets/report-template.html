@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bazaar Audit</title>
+<!--
+  HOW TO USE (for the agent):
+  Fill ONLY the `DATA` object below with real audit results, then save as a new .html file.
+  Do NOT restyle or change the palette. The render script builds the whole report from DATA
+  using safe DOM methods.
+    meta[]     : header key/values (Mode, Spec, x402 host, Resource host, payTo, Date …)
+    summary[]  : one entry per bucket {key,label,count,note}  (no color; monochrome by design)
+    sections[] : detailed groups; each endpoint may carry code `snippets` (each gets a Copy button)
+    fixOrder[] : numbered recommendations (inline `code` and **bold** supported)
+    flags[]    : cross-cutting notes (inline `code`/`**bold**` supported)
+  `status` on a section is a short word ("blocked"/"needs action"/"working") shown as a plain tag.
+  Snippet `code` is rendered as raw text (never HTML).
+
+  DESIGN — do not deviate: off-white canvas, white cards, ONE hairline border, ink text shades,
+  and exactly ONE accent (Base blue #0052ff) used only for the header rule, number badges, links,
+  and the Copy control. Serif display (Georgia) for the H1 + section titles; system sans for body;
+  mono for labels/code. No other hues, no gradients (except the one subtle header wash), no
+  colored card borders, no left accent bars.
+-->
+<style>
+  :root{
+    --bg:#f4f4f2; --surface:#ffffff; --ink:#17181c; --ink-70:#54585f; --ink-40:#8b9099;
+    --border:#e5e5e1; --border-strong:#d7d7d2;
+    --accent:#0052ff; --accent-600:#0040c4; --accent-tint:#eef2ff;
+    --radius:12px; --radius-sm:8px;
+    --serif:"Iowan Old Style",Georgia,"Times New Roman",serif;
+    --sans:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:15px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:860px;margin:0 auto;padding:0 24px 96px}
+  code{font-family:var(--mono);font-size:.86em;background:#f0f0ec;
+    padding:.1em .36em;border-radius:4px;color:var(--ink)}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ink-40);font-weight:500}
+
+  /* Header — its own distinguished dark band */
+  header.hero{margin:28px 0 34px;padding:36px 36px 32px;border-radius:var(--radius);color:#fff;
+    background:radial-gradient(130% 150% at 12% -25%,#23252d 0%,#141519 62%)}
+  header.hero .kicker{color:#6f90ff;margin:0 0 16px}
+  header.hero h1{font-family:var(--serif);font-weight:600;font-size:36px;line-height:1.08;
+    letter-spacing:-.01em;margin:0 0 8px;color:#fff}
+  header.hero .target{color:#b7bbc4;font-size:15.5px;margin:0 0 28px}
+  .meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px 28px}
+  .meta div{min-width:0}
+  .meta dt{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    color:#7d818b;margin:0 0 4px}
+  .meta dd{margin:0;font-size:13.5px;color:#e6e7ea;word-break:break-word}
+
+  /* Headline / verdict */
+  .headline{font-size:17px;line-height:1.55;color:var(--ink);margin:0 0 40px;max-width:64ch}
+
+  h2.section{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ink-40);font-weight:500;margin:0 0 16px}
+  .section-wrap{margin-bottom:44px}
+
+  /* Summary — uniform monochrome cards */
+  .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0;
+    border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
+  .stat{padding:18px 20px;border-right:1px solid var(--border)}
+  .stat:last-child{border-right:none}
+  .stat .n{font-size:30px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .stat.zero .n{color:var(--ink-40)}
+  .stat .k{font-family:var(--mono);font-size:11px;letter-spacing:.03em;color:var(--ink);margin-top:10px;font-weight:600}
+  .stat .note{color:var(--ink-40);font-size:12px;margin-top:2px}
+  @media(max-width:640px){.summary{grid-template-columns:1fr 1fr}
+    .stat{border-bottom:1px solid var(--border)}}
+
+  /* Detail blocks */
+  .block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:22px 24px;margin-bottom:14px}
+  .block-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+  .block-head h3{font-family:var(--serif);font-weight:600;font-size:19px;margin:0;letter-spacing:-.01em}
+  .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--ink-40);border:1px solid var(--border-strong);border-radius:999px;padding:2px 9px;white-space:nowrap}
+  .block .intro{color:var(--ink-70);font-size:14px;margin:8px 0 2px;max-width:70ch}
+
+  /* Endpoint rows */
+  .ep{border-top:1px solid var(--border);padding:16px 0 4px;margin-top:14px}
+  .ep:first-of-type{margin-top:16px}
+  .ep-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .ep-name{font-family:var(--mono);font-size:13px;font-weight:600;word-break:break-all}
+  .ep-price{font-family:var(--mono);font-size:12.5px;color:var(--ink-40);white-space:nowrap}
+  .ep-verdict{color:var(--ink-70);font-size:13.5px;margin-top:6px}
+
+  /* Code snippet + copy — dark block, clearly distinct from the white cards */
+  .snip{margin:12px 0 4px;border:1px solid #2a2c33;border-radius:var(--radius-sm);overflow:hidden;background:#17181c}
+  .snip-head{display:flex;align-items:center;justify-content:space-between;
+    background:#1e2026;border-bottom:1px solid #2a2c33;padding:6px 8px 6px 12px}
+  .snip-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#8a8f99}
+  .copy{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.04em;color:#cdd6ea;
+    background:transparent;border:1px solid rgba(255,255,255,.16);border-radius:6px;padding:4px 11px;cursor:pointer;transition:all .12s}
+  .copy:hover{border-color:#6f90ff;background:rgba(111,144,255,.14);color:#fff}
+  .copy.copied{color:#8a8f99;border-color:rgba(255,255,255,.12)}
+  pre{margin:0;padding:14px 16px;overflow:auto;background:#17181c}
+  pre code{background:none;padding:0;font-size:12.5px;line-height:1.6;color:#e7e8ec;white-space:pre}
+
+  /* Fix order */
+  ol.fixes{counter-reset:f;list-style:none;padding:0;margin:0}
+  ol.fixes li{position:relative;padding:14px 0 14px 46px;border-top:1px solid var(--border)}
+  ol.fixes li:first-child{border-top:none;padding-top:2px}
+  ol.fixes li:first-child::before{top:0}
+  ol.fixes li::before{counter-increment:f;content:counter(f);position:absolute;left:0;top:13px;
+    width:26px;height:26px;border-radius:999px;background:var(--accent);color:#fff;
+    font-family:var(--mono);font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  ul.flags{list-style:none;padding:0;margin:0}
+  ul.flags li{padding:12px 0 12px 22px;position:relative;border-top:1px solid var(--border);color:var(--ink);font-size:14px}
+  ul.flags li:first-child{border-top:none}
+  ul.flags li::before{content:"";position:absolute;left:3px;top:19px;width:6px;height:6px;
+    border-radius:999px;background:var(--accent)}
+
+  footer{margin-top:16px;color:var(--ink-40);font-size:12px;font-family:var(--mono);letter-spacing:.04em}
+  .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(16px);
+    background:var(--ink);color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;
+    opacity:0;pointer-events:none;transition:all .16s}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <h1 id="h-title"></h1>
+    <p class="target" id="h-target"></p>
+    <dl class="meta" id="h-meta"></dl>
+  </header>
+
+  <p class="headline" id="headline"></p>
+
+  <div class="section-wrap">
+    <h2 class="section">Summary</h2>
+    <div class="summary" id="summary"></div>
+  </div>
+
+  <div class="section-wrap">
+    <h2 class="section">Detail</h2>
+    <div id="sections"></div>
+  </div>
+
+  <div class="section-wrap" id="fixorder-wrap" style="display:none">
+    <h2 class="section">Recommended fix order</h2>
+    <div class="block"><ol class="fixes" id="fixorder"></ol></div>
+  </div>
+
+  <div class="section-wrap" id="flags-wrap" style="display:none">
+    <h2 class="section">Cross-cutting flags</h2>
+    <div class="block"><ul class="flags" id="flags"></ul></div>
+  </div>
+
+  <footer id="footer"></footer>
+</div>
+<div class="toast" id="toast">Copied</div>
+
+<script>
+/* ============================================================================
+   FILL THIS OBJECT. Everything below it is render logic — do not edit that.
+   The sample data is a real run (kept as a reference); replace it wholesale.
+   ============================================================================ */
+const DATA = {
+  title: "Bazaar Audit — AgentMail",
+  target: "Provider: agentmail · Read-only audit (no payments made)",
+  meta: [
+    { label: "Mode", value: "Read-only" },
+    { label: "Spec", value: "docs.agentmail.to/openapi.json (76 paths)" },
+    { label: "x402 host", value: "x402.api.agentmail.to" },
+    { label: "Resource host (in 402s)", value: "api.paysponge.com (Sponge-proxied)" },
+    { label: "payTo", value: "0x6e3184C204e596dED89E8A5693B602097F4Ab687" },
+    { label: "Date", value: "2026-07-21" }
+  ],
+  headline: "Nothing AgentMail exposes is discoverable in the Bazaar today — **0 working (D) endpoints**. Of 11 registered x402 endpoints: 2 are correctly configured but never indexed, 2 are rejected by a schema bug, and 7 are free ($0) reads Bazaar refuses to index.",
+  summary: [
+    { key: "A", label: "Rejected", count: 2, note: "config bug" },
+    { key: "A′", label: "Won't index", count: 7, note: "$0 price" },
+    { key: "B", label: "Never indexed", count: 2, note: "needs a paid 200" },
+    { key: "C", label: "Not searchable", count: 0, note: "usage lapsed" },
+    { key: "D", label: "Working", count: 0, note: "indexed + searchable" }
+  ],
+  sections: [
+    {
+      title: "Bucket A — rejected (provider-side config bug)", status: "blocked",
+      intro: "Both fail the `parse` check: the discovery extension's declared schema type doesn't match what the endpoint accepts. Facilitator verdict: `simulation.outcome=rejected`, `valid:false`. No payment fixes these.",
+      endpoints: [
+        { name: "POST /v0/domains", price: "$10.00",
+          verdict: "parse: `feedback_enabled` — Expected boolean, given string",
+          snippets: [
+            { label: "Reproduce",
+              code: "curl -s -X POST https://api.cdp.coinbase.com/platform/v2/x402/validate \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"resource\":\"https://x402.api.agentmail.to/v0/domains\",\"method\":\"POST\"}' \\\n  | jq '.preflight[] | select(.check==\"parse\")'" }
+          ] },
+        { name: "POST /v0/webhooks", price: "$0.01",
+          verdict: "parse: `pod_ids` / `event_types` / `inbox_ids` — Expected array, given string",
+          snippets: [] }
+      ]
+    },
+    {
+      title: "Bucket B — never indexed (valid, needs one paid 200)", status: "needs action",
+      intro: "Configured correctly and the facilitator would index them — they've just never had a successful (HTTP 200) paid call. A 200 re-crawls within ~1s; search surfaces after a lag (~1–40 min).",
+      endpoints: [
+        { name: "POST /v0/inboxes", price: "$2.00", verdict: "valid:true · accepted · parse OK · index:null", snippets: [] },
+        { name: "POST /v0/pods", price: "$0.01", verdict: "valid:true · accepted · parse OK · index:null", snippets: [] }
+      ]
+    }
+  ],
+  fixOrder: [
+    "**Provider-side (free, highest leverage):** fix the two `parse` type mismatches (`feedback_enabled`→boolean; `pod_ids`/`event_types`/`inbox_ids`→array). Moves both into Bucket B.",
+    "**Provider decision:** if the 7 free GETs should be discoverable, give them a ≥$0.001 price.",
+    "**Remediate Bucket B** with one successful paid 200 per endpoint to force indexing. Workaround only — durable visibility needs ongoing real traffic (Bazaar drops endpoints with no paid 200 in the trailing ~30 days)."
+  ],
+  flags: [
+    "The 402s report `resource.url = api.paysponge.com/...`, so once indexed these surface under the Sponge-hosted URL, not an agentmail.to domain. Confirm the indexed service name reads as \"AgentMail\"."
+  ],
+  footer: "Generated by /bazaar-audit · read-only, no payments made"
+};
+
+/* ===================== RENDER — safe DOM only (do not edit) ================= */
+const $ = (id) => document.getElementById(id);
+
+function h(tag, attrs, ...kids){
+  const e = document.createElement(tag);
+  for (const k in (attrs||{})){
+    if (k === "class") e.className = attrs[k];
+    else if (k === "dataset") Object.assign(e.dataset, attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  for (const kid of kids.flat()){
+    if (kid == null || kid === false) continue;
+    e.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return e;
+}
+// inline markdown -> text/element NODES (never HTML): **bold** and `code`.
+function inline(s){
+  const frag = document.createDocumentFragment();
+  const parts = String(s).split(/(\*\*.+?\*\*|`[^`]+`)/g);
+  for (const p of parts){
+    if (!p) continue;
+    if (p.length > 3 && p.startsWith("**") && p.endsWith("**")) frag.append(h("strong", {}, p.slice(2, -2)));
+    else if (p.length > 1 && p.startsWith("`") && p.endsWith("`")) frag.append(h("code", {}, p.slice(1, -1)));
+    else frag.append(p);
+  }
+  return frag;
+}
+
+$("h-title").textContent = DATA.title || "Bazaar Audit";
+$("h-target").textContent = DATA.target || "";
+for (const m of (DATA.meta || [])){
+  $("h-meta").append(h("div", {}, h("dt", {}, m.label), h("dd", {}, inline(m.value))));
+}
+$("headline").append(inline(DATA.headline || ""));
+
+for (const s of (DATA.summary || [])){
+  $("summary").append(h("div", {class:"stat" + (Number(s.count)===0 ? " zero" : "")},
+    h("div", {class:"n"}, s.count),
+    h("div", {class:"k"}, `${s.key} — ${s.label}`),
+    s.note ? h("div", {class:"note"}, s.note) : null));
+}
+
+let snipId = 0;
+function snippet(sn){
+  const id = "snip" + (snipId++);
+  const codeEl = h("code", {id}, sn.code);
+  const btn = h("button", {class:"copy", dataset:{target:id}}, "Copy");
+  return h("div", {class:"snip"},
+    h("div", {class:"snip-head"}, h("span",{class:"snip-label"}, sn.label||"code"), btn),
+    h("pre", {}, codeEl));
+}
+function endpoint(e){
+  const top = h("div", {class:"ep-top"}, h("span",{class:"ep-name"}, e.name),
+    e.price ? h("span",{class:"ep-price"}, e.price) : null);
+  const node = h("div", {class:"ep"}, top);
+  if (e.verdict) node.append(h("div", {class:"ep-verdict"}, inline(e.verdict)));
+  for (const sn of (e.snippets||[])) node.append(snippet(sn));
+  return node;
+}
+for (const sec of (DATA.sections || [])){
+  const head = h("div", {class:"block-head"}, h("h3", {}, sec.title),
+    sec.status ? h("span", {class:"tag"}, sec.status) : null);
+  const block = h("div", {class:"block"}, head);
+  if (sec.intro) block.append(h("div", {class:"intro"}, inline(sec.intro)));
+  for (const e of (sec.endpoints||[])) block.append(endpoint(e));
+  $("sections").append(block);
+}
+
+if ((DATA.fixOrder||[]).length){
+  $("fixorder-wrap").style.display = "";
+  for (const f of DATA.fixOrder) $("fixorder").append(h("li", {}, inline(f)));
+}
+if ((DATA.flags||[]).length){
+  $("flags-wrap").style.display = "";
+  for (const f of DATA.flags) $("flags").append(h("li", {}, inline(f)));
+}
+$("footer").textContent = DATA.footer || "";
+
+// copy-to-clipboard (reads textContent only; falls back to selecting the text)
+const toast = $("toast");
+document.addEventListener("click", (ev) => {
+  const btn = ev.target.closest(".copy"); if (!btn) return;
+  const el = document.getElementById(btn.dataset.target); if (!el) return;
+  const done = () => {
+    btn.textContent = "Copied"; btn.classList.add("copied");
+    toast.classList.add("show"); clearTimeout(window.__t);
+    window.__t = setTimeout(() => {
+      btn.textContent = "Copy"; btn.classList.remove("copied"); toast.classList.remove("show");
+    }, 1400);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(el.textContent).then(done).catch(() => selectNode(el));
+  } else {
+    selectNode(el);
+  }
+});
+function selectNode(el){
+  const r = document.createRange(); r.selectNodeContents(el);
+  const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+  toast.textContent = "Selected — press ⌘/Ctrl-C"; toast.classList.add("show");
+  clearTimeout(window.__t2); window.__t2 = setTimeout(() => {
+    toast.classList.remove("show"); toast.textContent = "Copied";
+  }, 1800);
+}
+</script>
+</body>
+</html>

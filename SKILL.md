@@ -65,14 +65,27 @@ can't prove absence. Batch the calls in parallel where possible.
 
 ## Step 5 — Report (and optionally remediate)
 
-Produce a summary table: counts for A/B/C/D and, per bucket, the specific endpoints + root cause +
-fix (pull the exact wording/fixes from `references/mechanics.md`):
+Give a short summary in chat, then produce the **HTML report** (the primary deliverable) covering,
+per bucket, the specific endpoints + root cause + fix (pull exact wording from `references/mechanics.md`):
 
 - **A rejected** → provider-side discovery-config bug. Show the `parse` error and offending field;
   give a reproduce curl and the concrete schema fix.
 - **B never-indexed** → never had a successful paid call. Fix: one successful (200) paid call.
 - **C active-not-searchable** → paid usage lapsed (~30-day window). Fix: a paid 200 / real traffic.
 - **D working** → fine.
+
+### Build the HTML report
+
+1. Copy `assets/report-template.html` to an output file (e.g. `bazaar-audit-<target>.html` in the
+   user's working directory, or `/tmp` if none).
+2. In the copy, replace **only** the `DATA = { … }` object with the real audit results — keep the
+   field shape (`title`, `target`, `meta[]`, `headline`, `summary[]`, `sections[]`, `fixOrder[]`,
+   `flags[]`, `footer`). Endpoint `snippets[]` become Copy-able code blocks (reproduce curls, fix
+   snippets). Inline `**bold**` and `` `code` `` are supported in text fields.
+3. **Do NOT touch the CSS or the render script, and do not add colors/effects.** The template is a
+   fixed design system: off-white canvas, white cards, one hairline border, ink text, and a single
+   accent (Base blue). Status is conveyed by words (the `status` tag), never by hue. Fill data only.
+4. Give the user the file path so they can open it. Offer to also print the summary in chat.
 
 **Remediation (only with explicit user consent):** paying a successful call to a B or C endpoint
 re-crawls it within ~1s (search surfaces after a lag). This requires an x402 wallet
