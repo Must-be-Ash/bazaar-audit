@@ -1,5 +1,7 @@
 # bazaar-audit
 
+> **Not maintained.** x402 and the services this uses may have changed since it was built; check the latest x402 docs before relying on it.
+
 A [Claude Code](https://docs.claude.com/en/docs/claude-code) **skill** that audits whether an
 x402 API's endpoints are discoverable in [Coinbase's Bazaar](https://docs.cdp.coinbase.com/x402) —
 and diagnoses/fixes the ones that aren't.
